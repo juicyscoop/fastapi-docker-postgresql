@@ -8,7 +8,7 @@ This is a demo FastAPI Application
 # Installation
 - from within /api
 
-Install database:
+Run database:
 -----
 make run-db
 
@@ -39,4 +39,9 @@ alembic revision -m "your message"
 
 # Database Migration
 alembic upgrade/downgrade head 
+
+
+
+# Prerequisites
+docker, FastAPI, yfinance, uvicorn, dotenv
 
