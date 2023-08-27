@@ -28,7 +28,7 @@ share/python-wheels/
 MANIFEST
 
 # javascript modules
-/node_modules 
+node_modules/
 /.next
 
 # PyInstaller
@@ -112,3 +112,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+#DB
+.api/db_data

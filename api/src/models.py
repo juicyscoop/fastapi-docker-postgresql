@@ -1,29 +1,42 @@
 
-from sqlalchemy import Integer, String, Float
+from sqlalchemy import String, Float, Date
 from sqlalchemy.sql.schema import Column
 from .database import Base
+from sqlalchemy import Column, String, Float
+from sqlalchemy.ext.declarative import declarative_base
 
+Base  = declarative_base()
 
-class Job(Base):
-    __tablename__ = 'jobs'
+class Stock(Base):
+    __tablename__ = 'stocks'
+    ticker = Column(String, nullable=False, primary_key=True)
 
-    id = Column(Integer, primary_key=True)
-    title = Column(String, nullable=False)
-    description = Column(String, nullable=False)
+class APPLDaily(Base):
+    __tablename__ = 'aapl_daily'
 
+    date = Column(Date, primary_key=True, nullable=False)
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    volume = Column(Float, nullable=False)
 
-class Entity(Base):
-    __tablename__ = 'entities'
+class TSLADaily(Base):
+    __tablename__ = 'tsla_daily'
 
-    id = Column(Integer, primary_key=True)
-    title = Column(String, nullable=False)
-    market = Column(String, nullable=False)
-    description = Column(String, nullable=True)
+    date = Column(Date, primary_key=True, nullable=False)
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    volume = Column(Float, nullable=False)
 
-class CryptoDailyDataPoint(Base):
-    __tablename__ = 'crypto_daily'
+class XOMDaily(Base):
+    __tablename__ = 'xom_daily'
 
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String, nullable=False)
-    date = Column(String, nullable=False)
-    price = Column(Float, nullable=False)
+    date = Column(Date, primary_key=True, nullable=False)
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    volume = Column(Float, nullable=False)

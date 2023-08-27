@@ -1,16 +1,41 @@
-This is a demo React Application, comprising:
+This is a demo FastAPI Application
 
-1. Backend -> FastAPI with Postgresql
-2. Frontend -> react-app
+- implemented is a simple backend for a stock-watcher app
+- purpose of this project was leanrning the implementation and usgae of FastAPI with uvicorn and docker
 
-First Demo
-######
-	- numerical data taken from YahooAPI - AAPL Stock
-	- this data visualized with a LineGrah - close price on daily granularity
-	- storage/update within database after each render?
-	- DatePicker -> user can input time range to be used for visualization
-	- Confirm button -> apply seletion in DatePicker
-nice to have:
-- API is able to handle at least 100 requests/s
-- LineGraph rendering is smooth and quick
+
+# Installation
+- from within /api
+
+Install database:
+-----
+make run-db
+
+
+Run Database:
+----
+uvicorn src.main:app --reload
+
+
+Install React dependencies:
+-----
+yarn install
+
+
+Run React app:
+------
+yarn run
+
+
+
+Database change management scripts are created and managed using alembic. See more at https://alembic.sqlalchemy.org/en/latest/tutorial.html
+
+# Db Initiation
+alembic init
+
+# Db Revision
+alembic revision -m "your message"
+
+# Database Migration
+alembic upgrade/downgrade head 
 

@@ -1,101 +1,124 @@
+import uvicorn
+import os
+import yfinance as yf
+from datetime import datetime, timedelta
+
 from fastapi import FastAPI, Depends
-from .schemas import CreateJobRequest, CreateEntityRequest
+from fastapi_sqlalchemy import DBSessionMiddleware, db
+
 from sqlalchemy.orm import Session
-from .database import get_db, Base, engine
-from .models import Job, Entity, CryptoDailyDataPoint
-import logging
-import sys
-from .yahoo import get_yahoo_data
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+from sqlalchemy.exc import IntegrityError
+
+from .models import APPLDaily as ModelAPPLDaily
+from .models import TSLADaily as ModelTSLADaily
+from .models import XOMDaily as ModelXOMDaily
+from .models import Stock as ModelStock
+
+from .database import get_db, engine
+
+from dotenv import load_dotenv
+
+from .setup_logging import root
+
+load_dotenv('.env')
+
+ALMEBIC_VERSION = "alembic_version"
+PORTFOLIO = "portfolio"
+PORTFOLIO_STOCK = "portfoliostock"
+STOCKS = "stocks"
+WATCHLIST = "watchlist"
+WATCHLIST_STOCK = "watchliststock"
+TRANSACTION = "transaction"
+USER = "users"
+ENTITIES = "entities"
+
+DATA_MODELS = {
+    "AAPL": ModelAPPLDaily,
+    "TSLA": ModelTSLADaily,
+    "XOM": ModelXOMDaily,
+}
+
+def get_select_all(table):
+    # TODO add filters
+    return f"SELECT * FROM {table}"
+
+def get_dates_in_range(start_date, end_date):
+    start_date = datetime.strptime(start_date, "%Y-%m-%d")
+    end_date = datetime.strptime(end_date, "%Y-%m-%d")
+    num_days = (end_date - start_date).days + 1
+    dates_in_range = [start_date + timedelta(days=i) for i in range(num_days)]
+    return [date.strftime("%Y-%m-%d") for date in dates_in_range]
 
 app = FastAPI()
 
+# to avoid csrftokenError
+app.add_middleware(DBSessionMiddleware, db_url=os.environ['DATABASE_URL'])
 
-@app.post("/")
-def create(details: CreateEntityRequest, db: Session = Depends(get_db)):
-    to_create = Entity(
-        title=details.title,
-        market=details.market,
-        description=details.description or None
-    )
-    db.add(to_create)
-    db.commit()
-    return {
-        "success": True,
-        "created_id": to_create.id
-    }
-
-@app.get("/")
-def get_by_id(id: int, db: Session = Depends(get_db)):
-    return db.query(Job).filter(Job.id == id).first()
+@app.get('/tables/')
+async def get_tables(db: Session = Depends(get_db)):
+    # inspector = inspect(db.engine)
+    # tables = inspector.get_table_names()
+    return {"tables": [i for i in engine.table_names()] }
 
 
-@app.get("/download_yahoo")
-def downloadYahooData(ticker: str, start_date: str, end_date: str, db: Session = Depends(get_db)):
-    data = get_yahoo_data(ticker, start_date, end_date)
+# GET STOCKS
+@app.get("/list_stocks")
+async def list_stocks(db: Session = Depends(get_db)):
+    result = Session.execute(db, statement=get_select_all(STOCKS))
+    return { "res": [i for i in result] }
+
+# SYNC STOCKS
+@app.get("/sync_stocks")
+async def sync_stocks(db: Session = Depends(get_db)):
+    tables = [i for i in engine.table_names()]
+    data_tables = [i for i in tables if i.endswith("_daily")]
+    root.info(str(data_tables))
+
+    for i in data_tables:
+        t = i.replace("_daily", "").upper()
+        db.add(ModelStock(ticker=t))
+
+    try:
+        db.commit()
+    except IntegrityError as e:
+        root.info("::: Data already present, update if u want to overwrite!")
+   
+# DOWNLOAD STOCK FROM YAHOO AND STORE IN DB
+@app.get("/download_stock_daily")
+async def download_stock_daily(
+    ticker: str, 
+    start_date: str,
+    end_date: str,
+    db: Session = Depends(get_db)
+    ):
+
+    if ticker not in DATA_MODELS.keys():
+        root.info("::: Ticker not allowed!")
+        return
+
+    start_date = datetime.strptime(start_date, "%Y-%m-%d")
+    end_date = datetime.strptime(end_date, "%Y-%m-%d")
+    stock_data = yf.download(ticker, start=start_date, end=end_date)
+
     objects = [
-        CryptoDailyDataPoint(ticker=ticker, date=row['Date'], price=row['Close']) for _,row in data.iterrows() 
+        DATA_MODELS[ticker](
+            date=index.strftime("%Y-%m-%d"),
+            open=row["Open"],
+            high=row["High"],
+            low=row["Low"],
+            close=row["Close"],
+            volume=row["Volume"],
+        )
+        for index, row in stock_data.iterrows()
     ]
-    db.bulk_save_objects(objects)
-    db.commit()
     
-    return {
-        "success": True,
-        "stored": len(object)
-    }
+    try:
+        db.bulk_save_objects(objects)
+        db.commit()
+    except IntegrityError as e:
+        root.info("::: Data already present, update if u want to overwrite!")
+   
 
-
-
-
-@app.delete("/")
-def delete(id: int, db: Session = Depends(get_db)):
-    db.query(Job).filter(Job.id == id).delete()
-    db.commit()
-    return {
-        "success": True
-    }
-
-@app.get("/list_entities")
-def listEntities(db: Session = Depends(get_db)):
-    query = 'SELECT * FROM entities'
-    result = Session.execute(db, statement=query)
-    return [i for i in result]
-
-
-@app.get("/list_tables")
-def listEntities(db: Session = Depends(get_db)):
-    logging.info(f"ENGINE: {engine}")
-    return [i for i in engine.table_names()]
-
-@app.get("/list_crypto_daily")
-def listCrypto(db: Session = Depends(get_db)):
-    query = 'SELECT * FROM crypto_daily'
-    result = Session.execute(db, statement=query)
-    return [i for i in result]
-
-def serialize_params(params):
-    out = ""
-    for key,value in params.items():
-        out += f"{key} {value},\n"
-
-
-# @app.post("/create_new_table")
-# def createTable(table_name: str, db: Session = Depends(get_db), **kwargs):
-#     if not Session.execute(db, f"SELECT TOP 1 FROM {table_name}"):
-#         logging.info(f"Creating new table: {table_name}")
-#         serialized_params = serialize_params(kwargs)
-#         query=f"""
-#         CREATE TABLE {table_name} (
-#             {serialized_params}
-#         );
-#         """
-#         Session.execute(db, statement=query)
-#         db.commit()
-#         return {
-#             "success": True,
-#         }
-#     else:
-#         return {
-#             "success": False,
-#             "code": 420,
-#         }
+# To run locally
+if __name__ == '__main__':
+    uvicorn.run(app, host='0.0.0.0', port=8000)
